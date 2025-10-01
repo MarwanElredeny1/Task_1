@@ -76,26 +76,32 @@ export async function createPerk(req, res, next) {
 // Update an existing perk by ID and validate only the fields that are being updated
 export async function updatePerk(req, res, next) {
   try {
-    // Validate only the fields that are being updated
-    const { value, error } = perkSchema.validate(req.body, {
-      stripUnknown: true, // Remove unknown fields
-      allowUnknown: true, // Allow fields not in schema
-      presence: "optional", // All fields are optional for updates
-    });
-
-    if (error) return res.status(400).json({ message: error.message });
-
-    // Find and update the perk, returning the updated document
-    const updatedPerk = await Perk.findByIdAndUpdate(
-      req.params.id,
-      { $set: value },
-      { new: true, runValidators: true }
-    );
-
-    // Check if perk exists
-    if (!updatedPerk) {
+    // First get the existing perk
+    const existingPerk = await Perk.findById(req.params.id);
+    if (!existingPerk) {
       return res.status(404).json({ message: "Perk not found" });
     }
+
+    // Get the existing data without Mongoose-specific fields
+    const { _id, __v, createdAt, updatedAt, ...existingData } =
+      existingPerk.toObject();
+
+    // Merge existing data with update data
+    const updateData = {
+      ...existingData,
+      ...req.body,
+    };
+
+    // Validate the complete object
+    const { value, error } = perkSchema.validate(updateData);
+    if (error) return res.status(400).json({ message: error.message });
+
+    // Update only the fields that were provided in req.body
+    const updatedPerk = await Perk.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true, runValidators: true }
+    );
 
     res.json({ perk: updatedPerk });
   } catch (err) {
